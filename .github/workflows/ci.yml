@@ -16,9 +16,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm install
       - run: npx prisma generate
-      - run: npx next build 2>&1 | tail -5
+      - run: npx next build
         env:
           DATABASE_URL: "file:./data/ci.db"
           AUTH_SECRET: "ci-secret-minimum-32-characters-long"
@@ -32,7 +32,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm install
       - run: npx prisma generate
       - run: npm test
         env:
@@ -47,7 +47,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm install
       - run: npx prisma generate
       - run: mkdir -p prisma/data && npx prisma db push
         env:
