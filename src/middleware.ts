@@ -1,36 +1,9 @@
-import { auth } from "@/lib/auth";
-import { NextResponse } from "next/server";
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth.config";
 
-export default auth((req) => {
-  const isLoggedIn = !!req.auth;
-  const isLoginPage = req.nextUrl.pathname === "/login";
-  const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
+export const { auth: middleware } = NextAuth(authConfig);
 
-  // Allow auth API routes
-  if (isAuthApi) {
-    return NextResponse.next();
-  }
-
-  // Redirect to login if not authenticated
-  if (!isLoggedIn && !isLoginPage) {
-    return NextResponse.redirect(new URL("/login", req.url));
-  }
-
-  // Redirect to dashboard if already logged in and on login page
-  if (isLoggedIn && isLoginPage) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
-  }
-
-  // Admin-only routes
-  if (req.nextUrl.pathname.startsWith("/admin")) {
-    const role = req.auth?.user?.role;
-    if (role !== "ADMIN") {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
-    }
-  }
-
-  return NextResponse.next();
-});
+export default middleware;
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
