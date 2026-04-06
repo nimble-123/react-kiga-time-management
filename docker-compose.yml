@@ -1,0 +1,20 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=file:/app/data/app.db
+      - AUTH_SECRET=${AUTH_SECRET:-change-me-to-a-random-secret-min-32-chars}
+      - AUTH_URL=http://localhost:3000
+    volumes:
+      # SQLite-Datenbank wird AUSSERHALB des Containers gespeichert.
+      # Bei docker compose: benanntes Volume (ueberlebt Container-Neustarts und -Updates).
+      # Alternativ Bind-Mount auf Host-Pfad: ./data:/app/data
+      - app-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  app-data:
+    # Daten liegen unter /var/lib/docker/volumes/..._app-data/_data
+    # Backup: docker cp <container>:/app/data/app.db ./backup.db

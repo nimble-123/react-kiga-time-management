@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  displayName  String   @map("display_name")
+  passwordHash String   @map("password_hash")
+  role         String   @default("USER") // USER | ADMIN
+  isActive     Boolean  @default(true) @map("is_active")
+  mustChangePassword Boolean @default(true) @map("must_change_password")
+  entryDate    DateTime? @map("entry_date")  // Eintrittsdatum
+  exitDate     DateTime? @map("exit_date")   // Austrittsdatum
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  workSchedules  WorkSchedule[]
+  dayEntries     DayEntry[]
+  monthlyReviews MonthlyReview[]  @relation("UserReviews")
+  reviewedMonths MonthlyReview[]  @relation("ReviewerReviews")
+  initialBalance InitialBalance?
+
+  @@map("users")
+}
+
+model WorkSchedule {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @map("user_id")
+  validFrom   DateTime  @map("valid_from")
+  validTo     DateTime? @map("valid_to")
+  weeklyHours Float     @map("weekly_hours")
+  workingDays String    @default("[\"MO\",\"TU\",\"WE\",\"TH\",\"FR\"]") @map("working_days") // JSON array
+  dailyHours  String?   @map("daily_hours") // JSON map e.g. {"MO":6,"TU":6,...}
+  notes       String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("work_schedules")
+}
+
+model DayEntry {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  workDate  DateTime @map("work_date")
+  marker    String?  // URLAUB | KRANK | FEIERTAG | UEBERSTD_ABBAU | null
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timeBlocks TimeBlock[]
+
+  @@unique([userId, workDate])
+  @@map("day_entries")
+}
+
+model TimeBlock {
+  id         Int      @id @default(autoincrement())
+  dayEntryId Int      @map("day_entry_id")
+  blockType  String   @map("block_type") // TAETIGKEIT | VORBEREITUNG | DB | PAUSE
+  startTime  String   @map("start_time") // HH:MM
+  endTime    String   @map("end_time")   // HH:MM
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  dayEntry DayEntry @relation(fields: [dayEntryId], references: [id], onDelete: Cascade)
+
+  @@map("time_blocks")
+}
+
+model MonthlyReview {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @map("user_id")
+  year        Int
+  month       Int
+  status      String    @default("OPEN") // OPEN | SUBMITTED | APPROVED | RETURNED
+  submittedAt DateTime? @map("submitted_at")
+  reviewedBy  Int?      @map("reviewed_by")
+  reviewedAt  DateTime? @map("reviewed_at")
+  comment     String?
+
+  user     User  @relation("UserReviews", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer User? @relation("ReviewerReviews", fields: [reviewedBy], references: [id])
+
+  @@unique([userId, year, month])
+  @@map("monthly_reviews")
+}
+
+model InitialBalance {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @unique @map("user_id")
+  asOfDate      DateTime @map("as_of_date")
+  overtimeHours Float    @default(0) @map("overtime_hours")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("initial_balances")
+}
+
+model Holiday {
+  id   Int      @id @default(autoincrement())
+  date DateTime @unique
+  name String
+
+  @@map("holidays")
+}

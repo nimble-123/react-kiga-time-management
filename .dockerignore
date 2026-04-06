@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+*.md
+!README.md
+prisma/data
+test-results
+playwright-report
+coverage
+tests
+.env
+.env.local

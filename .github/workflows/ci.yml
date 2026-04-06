@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx next build 2>&1 | tail -5
+        env:
+          DATABASE_URL: "file:./data/ci.db"
+          AUTH_SECRET: "ci-secret-minimum-32-characters-long"
+
+  unit-tests:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm test
+        env:
+          DATABASE_URL: "file:./data/ci.db"
+
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: mkdir -p prisma/data && npx prisma db push
+        env:
+          DATABASE_URL: "file:./prisma/data/app.db"
+      - run: npx tsx prisma/seed.ts
+        env:
+          DATABASE_URL: "file:./prisma/data/app.db"
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+        env:
+          DATABASE_URL: "file:./prisma/data/app.db"
+          AUTH_SECRET: "ci-secret-minimum-32-characters-long"
+          AUTH_URL: "http://localhost:3000"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  docker:
+    name: Docker Build & Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t kiga-zeiterfassung:ci .
+      - name: Start container
+        run: |
+          docker run -d --name kiga-ci \
+            -p 3000:3000 \
+            -e DATABASE_URL="file:/app/data/app.db" \
+            -e AUTH_SECRET="ci-secret-minimum-32-characters-long" \
+            -e AUTH_URL="http://localhost:3000" \
+            kiga-zeiterfassung:ci
+      - name: Wait for healthy
+        run: |
+          for i in $(seq 1 30); do
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' kiga-ci 2>/dev/null || echo "starting")
+            echo "Attempt $i: $STATUS"
+            if [ "$STATUS" = "healthy" ]; then exit 0; fi
+            sleep 2
+          done
+          echo "Container did not become healthy"
+          docker logs kiga-ci
+          exit 1
+      - name: Smoke test
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/login)
+          echo "HTTP status: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Smoke test failed"
+            docker logs kiga-ci
+            exit 1
+          fi
+      - name: Cleanup
+        if: always()
+        run: docker stop kiga-ci && docker rm kiga-ci
